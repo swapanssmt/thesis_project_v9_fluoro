@@ -214,6 +214,7 @@ void mexFunction(int nlhs, mxArray **plhs, int nrhs, const mxArray **prhs)
 
   // Show lossage
   if(MC.loss) mexPrintf(" %ld photons lost during computation!\n", MC.loss);
+  mexPrintf(" %ld fluorescence photons generated during computation!\n", MC.N_F_Photons);
 
   // Copy solution from MC to output
   Array<double> vsolr, vsoli, bsolr, bsoli;

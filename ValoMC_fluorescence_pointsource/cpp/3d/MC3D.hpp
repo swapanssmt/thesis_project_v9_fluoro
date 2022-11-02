@@ -186,8 +186,9 @@ public:
   Array<double> LightSourcesCDF;
 
   // Model parameters
-  double weight0, chance; // Weight when to commence the roulette & the chance of revitalizing the photon
+  double weight0, F_weight0, chance; // Weight when to commence the roulette & the chance of revitalizing the photon
   long loss;              // Number of photons lost
+  long N_F_Photons;
 
   // Thread-safe random number generator
   mt_rng rng;
@@ -213,8 +214,10 @@ MC3D::MC3D()
   //NBin3Dphi=1;
   f = omega = 0.0;
   weight0 = 0.001;
+  F_weight0 = 1E-9;
   chance = 0.1;
   loss = 0;
+  N_F_Photons=0;
 
   seed = 5489UL;
 
@@ -361,8 +364,10 @@ MC3D &MC3D::operator=(const MC3D &ref)
     LightSourcesMother = ref.LightSourcesMother;
     LightSourcesCDF = ref.LightSourcesCDF;
     weight0 = ref.weight0;
+    F_weight0 = ref.F_weight0;
     chance = ref.chance;
     loss = ref.loss;
+    N_F_Photons = ref.N_F_Photons; 
 
     threadcount = ref.threadcount;
     rank = ref.rank;
@@ -766,6 +771,7 @@ void MC3D::Init()
   //MPI_Bcast(&NBin3Dtheta, 1, MPI_LONG, 0, MPI_COMM_WORLD);
   //MPI_Bcast(&NBin3Dphi, 1, MPI_LONG, 0, MPI_COMM_WORLD);
   MPI_Bcast(&weight0, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+  MPI_Bcast(&F_weight0, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
   MPI_Bcast(&chance, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
   Nphoton /= nodecount;
 #endif
@@ -1939,7 +1945,7 @@ void MC3D::PropagatePhoton_f(Photon *phot)
       }
 
       // Test for surival of the photon via roulette
-      if (phot->weight < weight0)
+      if (phot->weight < F_weight0)
       {
         if (UnifClosed() > chance)
           return;
@@ -2089,8 +2095,9 @@ void MC3D::PropagatePhoton(Photon *phot)
       phot->weight *= exp(-mua_ex_sol[phot->curel] * ds);
       // checking for fluoroscence
       double P_f=(1-exp(-ds*mua_ex_f[phot->curel]));
-      if(UnifOpen()<P_f)
+      if(UnifOpen()<P_f && Qyield_f>0)
       {
+        N_F_Photons++;
         CreatePhoton_f(phot);
         PropagatePhoton_f(phot);
         return;
@@ -2270,10 +2277,12 @@ void MC3D::MonteCarlo(bool (*progress)(double), void (*finalchecks)(int,int))
   // Sum up the results to first instance and delete MCS
   Nphoton = 0;
   loss = 0;
+  N_F_Photons=0;
   for (jj = 0; jj < nthread; jj++)
   {
     Nphoton += MCS[jj].Nphoton;
     loss += MCS[jj].loss;
+    N_F_Photons += MCS[jj].N_F_Photons;
   }
   for (ii = 0; ii < H.Nx; ii++)
   {
@@ -2457,6 +2466,8 @@ void MC3D::MonteCarlo(bool (*progress)(double), void (*finalchecks)(int,int))
   // Sum up lost photons
   MPI_Allreduce(&loss, &tmplong, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
   loss = tmplong;
+  MPI_Allreduce(&N_F_Photons, &tmplong, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
+  N_F_Photons = tmplong;
 #endif
 
   // Normalize output variables

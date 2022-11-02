@@ -106,7 +106,10 @@ int main(int argc, char **argv)
   }
 
   if (MC.loss)
+  {
     printf(" %ld photons lost during computation!\n", MC.loss);
+  }
+  printf(" %ld fluorescence photons generated during computation!\n", MC.N_F_Photons);
 
   //#ifdef USE_OMP
   //  double tend = omp_get_wtime();
